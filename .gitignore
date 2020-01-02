@@ -1,0 +1,5 @@
+*.xml
+*.kml
+.DS_Store
+/open data/
+

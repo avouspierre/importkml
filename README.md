@@ -14,7 +14,7 @@ Install GDAL modules (preferred with Linux machine or docker > osgeo/gdal:alpine
 Install PostGIS database (preferred with Linux machine or docker  mdillon/postgis)
 Install dependencies :
 
-`pip/pip3 install requirements.txt`
+`pip/pip3 install -r requirements.txt`
 
 # Usage  
 
@@ -33,5 +33,7 @@ Launch the command :
 # Example of the use with a docker machine : 
 
 `docker run -it -v /Users/pierrelagarde/Documents/Personnel/code/importKML/src:/app --net importkml_default --link importkml_postgres_1:db  osgeo/gdal:alpine-normal-latest sh`
+
 `cd app`
+
 `python test-read-kml.py --pg="PG:dbname='import_kml' host='db' port='5432' user='***' password='***'" --dir="location of the directory with xml files" --create`

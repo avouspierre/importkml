@@ -1,5 +1,5 @@
 # importkml
-Import KML files provided by the export of the SAE INEO in Python in PostGIS database (only multilines). 
+Import KML files provided by the export of the SAE INEO in Python in PostGIS database (multilines et stop area). 
 Use the name of the file to find the transportation lines and the date of the schedule. The name of the file must be : 
 Orleans_1_PT4_20190920
 
@@ -20,7 +20,7 @@ Install dependencies :
 
 Launch the command : 
 
-`python test-read-kml.py --pg="PG:dbname='import_kml' host='db' port='5432' user='***' password='***'" --dir="location of the directory with xml files" --create`
+`python read-import-kml.py --pg="PG:dbname='import_kml' host='db' port='5432' user='***' password='***'" --dir="location of the directory with xml files" --create`
 
 
 | Option        | Description           | 
@@ -36,4 +36,8 @@ Launch the command :
 
 `cd app`
 
-`python test-read-kml.py --pg="PG:dbname='import_kml' host='db' port='5432' user='***' password='***'" --dir="location of the directory with xml files" --create`
+`python read-import-kml.py --pg="PG:dbname='import_kml' host='db' port='5432' user='***' password='***'" --dir="location of the directory with xml files" --create`
+
+# Help for the developers 
+
+Use of the lib https://gdal.org/python/ 

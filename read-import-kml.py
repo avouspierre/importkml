@@ -14,7 +14,7 @@ logging.basicConfig(level=logging.INFO)
 ogr.UseExceptions()
 
 def extractLineDate(filename):
-    logging.info("Name of the file %s" % filename )
+    logging.debug("Name of the file %s" % filename )
     splitFileName = filename.split("_")
     line = splitFileName[1]
     dateText = splitFileName[3].split(".")[0]
@@ -25,6 +25,7 @@ def extractDataFromFile(daKmlfile):
     
     lineOfFile, dateOfFile = extractLineDate(os.path.basename(daKmlfile))
     driver = ogr.GetDriverByName('KML')
+
     try:
         dataSource = driver.Open(daKmlfile)
     except Exception as e:
@@ -32,32 +33,41 @@ def extractDataFromFile(daKmlfile):
 
     if dataSource is None:
         logging.error('Could not open %s' % (daKmlfile))
+        return False,False
     else:
-        logging.info('Opened %s' % (daKmlfile))
+        logging.debug('Opened %s' % (daKmlfile))
 
-        data_records=[]
-        for kml_lyr in dataSource:
-            layerName = kml_lyr.GetName()
-            lyr_def = kml_lyr.GetGeomType()
+    data_records_lines=[]
+    data_records_stop=[]
+    for kml_lyr in dataSource:
+        layerName = kml_lyr.GetName()
+        lyr_def = kml_lyr.GetGeomType()
         
+        # logging.info("For the file %s and the layer %s , the geometry is %s" % (daKmlfile,layerName,ogr.GeometryTypeToName(lyr_def)))
+    
+        layerTypeGeom = ogr.GeometryTypeToName(kml_lyr.GetGeomType())
+        featureCount = kml_lyr.GetFeatureCount()
+        logging.debug("Number of features in %s: %d" % (layerName,featureCount))
+        for feat in kml_lyr:
+            data_values = {}
+            record = feat.items()
+            data_values['geom'] = feat.GetGeometryRef().ExportToWkt()
+            data_values['name'] = record['Name']
+            data_values['description'] = record['Description']
+            data_values['layer'] = layerName
+            data_values['line'] = lineOfFile
+            data_values['date'] = dateOfFile 
             if lyr_def == ogr.wkbLineString or lyr_def == ogr.wkbMultiLineString:
-                layerTypeGeom = ogr.GeometryTypeToName(kml_lyr.GetGeomType())
-                featureCount = kml_lyr.GetFeatureCount()
-                logging.info("Number of features in %s: %d" % (layerName,featureCount))
-                for feat in kml_lyr:
-                    data_values = {}
-                    record = feat.items()
-                    data_values['geom'] = feat.GetGeometryRef().ExportToWkt()
-                    data_values['name'] = record['Name']
-                    data_values['description'] = record['Description']
-                    data_values['layer'] = layerName
-                    data_values['line'] = lineOfFile
-                    data_values['date'] = dateOfFile 
-                    data_records.append(data_values)
-        return data_records
+                data_records_lines.append(data_values)
+            elif lyr_def == ogr.wkbPoint or lyr_def == ogr.wkbPoint25D:
+                data_records_stop.append(data_values)
+    
+    return data_records_lines,data_records_stop
 
 
 def createTableImport(pg_ds):
+
+    # Table of lines
     table_name = 'lines_sae'
     srs = osr.SpatialReference()
     srs.ImportFromEPSG(4326)
@@ -80,6 +90,7 @@ def createTableImport(pg_ds):
     logging.info('Table %s created.' % table_name)
 
     
+    # Table of aggregate lines
     table_name = 'lines_sae_aggr'
     srs = osr.SpatialReference()
     srs.ImportFromEPSG(4326)
@@ -95,17 +106,39 @@ def createTableImport(pg_ds):
     pg_layer.CreateField(fd_def)
     fd_def = ogr.FieldDefn('date', ogr.OFTDate)
     pg_layer.CreateField(fd_def)
+    logging.info('Table %s created.' % table_name)
+    
     
     #add unique key
     # too many issues with the data geometry quality
     #pg_ds.ExecuteSQL("alter table lines_sae_aggr ADD unique (layer,date,line)")
 
+
+    # Table of stop points provided by the SAE
+    table_name = 'stop_area_sae'
+    srs = osr.SpatialReference()
+    srs.ImportFromEPSG(4326)
+    pg_layer = pg_ds.CreateLayer(table_name, srs = srs, geom_type=ogr.wkbPoint, options = [
+                'GEOMETRY_NAME=the_geom',
+                'OVERWRITE=YES', 
+                'SCHEMA=public',
+                ])
+
+    fd_def = ogr.FieldDefn('name', ogr.OFTString)
+    pg_layer.CreateField(fd_def)
+    fd_def = ogr.FieldDefn('description', ogr.OFTString)
+    pg_layer.CreateField(fd_def)
+    fd_def = ogr.FieldDefn('layer', ogr.OFTString)
+    pg_layer.CreateField(fd_def)
+    fd_def = ogr.FieldDefn('line', ogr.OFTString)
+    pg_layer.CreateField(fd_def)
+    fd_def = ogr.FieldDefn('date', ogr.OFTDate)
+    pg_layer.CreateField(fd_def)
     logging.info('Table %s created.' % table_name)
-    
+
     return True
 
-def addDataInPostGres(data,pg_ds):
-    table_name = 'lines_sae'
+def addDataInPostGres(data,pg_ds,table_name):
     pg_layer = pg_ds.GetLayer(table_name)
     featureDefn = pg_layer.GetLayerDefn()
     
@@ -181,8 +214,9 @@ def main(argv):
     #import in PostGis
     logging.info("Import des fichiers en BD")
     for Kmlfile in tqdm(allFilesKml):
-        data_records= extractDataFromFile(Kmlfile)  
-        logging.info("File %s has been added in PostGres ? %r" % (Kmlfile, addDataInPostGres(data_records,pg_ds)))          
+        data_records_lines, data_records_stop= extractDataFromFile(Kmlfile)  
+        logging.debug("File %s has been added in PostGres for lines ? %r" % (Kmlfile, addDataInPostGres(data_records_lines,pg_ds,"lines_sae")))  
+        logging.debug("File %s has been added in PostGres for stop ? %r" % (Kmlfile, addDataInPostGres(data_records_stop,pg_ds,"stop_area_sae")))          
 
     #create aggr table
     data_update = pg_ds.ExecuteSQL("insert into lines_sae_aggr(layer,line,date,the_geom) select layer,line, date,  (st_dump(st_linemerge(st_union(the_geom)))).geom from lines_sae group by line, date, layer order by line,date")
